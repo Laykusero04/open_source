@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "220346182285",
+    "project_id": "opensource-e901c",
+    "storage_bucket": "opensource-e901c.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:220346182285:android:647ad30b5fadc6268710c4",
+        "android_client_info": {
+          "package_name": "com.example.open_source_pdf"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAt7yHXNybM71KHW1VyxHv6NmPOYTJ80yM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
