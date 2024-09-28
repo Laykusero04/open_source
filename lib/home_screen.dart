@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:open_source_pdf/admin/login.dart';
-import 'package:uuid/uuid.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'pdf_list_screen.dart';
 import 'register_account_screen.dart';
 
@@ -24,7 +24,7 @@ class _HomeState extends State<HomeScreen> {
   }
 
   Future<Map<String, dynamic>> _getUserData() async {
-    final String deviceUid = await _getOrGenerateUniqueId();
+    final String deviceUid = await _getDeviceUniqueId();
     final userDoc = await _getUserDocument(deviceUid);
     return {
       'deviceUid': deviceUid,
@@ -34,20 +34,43 @@ class _HomeState extends State<HomeScreen> {
     };
   }
 
-  Future<String> _getOrGenerateUniqueId() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      String? storedUid = prefs.getString('device_uid');
+  Future<String> _getDeviceUniqueId() async {
+    final DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+    final prefs = await SharedPreferences.getInstance();
+    String? storedDeviceId = prefs.getString('device_uid');
 
-      if (storedUid == null) {
-        storedUid = Uuid().v4();
-        await prefs.setString('device_uid', storedUid);
+    if (storedDeviceId != null && storedDeviceId.isNotEmpty) {
+      return storedDeviceId;
+    }
+
+    String deviceId = '';
+    try {
+      if (Theme.of(context).platform == TargetPlatform.android) {
+        final AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
+        deviceId = androidInfo.id ?? ''; // Use Android ID
+      } else if (Theme.of(context).platform == TargetPlatform.iOS) {
+        final IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
+        deviceId = iosInfo.identifierForVendor ?? ''; // Use iOS Vendor ID
       }
 
-      return storedUid;
+      // If we couldn't get a device ID, generate a unique one
+      if (deviceId.isEmpty) {
+        deviceId = DateTime.now().millisecondsSinceEpoch.toString() +
+            '-' +
+            UniqueKey().toString();
+      }
+
+      // Store the device ID for future use
+      await prefs.setString('device_uid', deviceId);
+      return deviceId;
     } catch (e) {
-      print('Error accessing SharedPreferences: $e');
-      return Uuid().v4();
+      print('Error getting device info: $e');
+      // In case of an error, generate and store a fallback ID
+      String fallbackId = DateTime.now().millisecondsSinceEpoch.toString() +
+          '-fallback-' +
+          UniqueKey().toString();
+      await prefs.setString('device_uid', fallbackId);
+      return fallbackId;
     }
   }
 
@@ -81,11 +104,11 @@ class _HomeState extends State<HomeScreen> {
     });
   }
 
-  void _navigateToPdfList() {
+  void _navigateToPdfList(String deviceUid) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => PdfListScreen(),
+        builder: (context) => PdfListScreen(deviceUuid: deviceUid),
       ),
     );
   }
@@ -251,7 +274,7 @@ class _HomeState extends State<HomeScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ElevatedButton.icon(
-          onPressed: _navigateToPdfList,
+          onPressed: () => _navigateToPdfList(userData['deviceUid']),
           style: ElevatedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 15),
             shape:

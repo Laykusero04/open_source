@@ -37,10 +37,18 @@ class _ManageUsersState extends State<ManageUsers>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Manage Users'),
-        backgroundColor: Colors.orange[700],
+        title: Text(
+          'Manage Users',
+          style: TextStyle(color: Colors.white),
+        ),
+        backgroundColor: Colors.deepOrange,
         bottom: TabBar(
           controller: _tabController,
+          indicatorColor: Colors.white,
+          indicatorWeight: 4.0,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorSize: TabBarIndicatorSize.tab,
           tabs: [
             Tab(text: 'Users'),
             Tab(text: 'Admins'),
@@ -65,7 +73,7 @@ class _ManageUsersState extends State<ManageUsers>
 
   Widget _buildUserList() {
     return Container(
-      color: Colors.orange[50],
+      color: Colors.white,
       child: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance.collection('users').snapshots(),
         builder: (context, snapshot) {
@@ -94,7 +102,7 @@ class _ManageUsersState extends State<ManageUsers>
 
   Widget _buildAdminList() {
     return Container(
-      color: Colors.orange[50],
+      color: Colors.white,
       child: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance.collection('admin').snapshots(),
         builder: (context, snapshot) {
@@ -143,15 +151,19 @@ class _ManageUsersState extends State<ManageUsers>
               children: [
                 Text(
                     'Device ID: ${isAdmin ? data['email'] : data['deviceUniqueId']}'),
-                SizedBox(height: 8),
-                Text('Role: ${isAdmin ? 'Admin' : 'User'}'),
                 SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     ElevatedButton.icon(
-                      icon: Icon(Icons.edit),
-                      label: Text('Edit'),
+                      icon: Icon(
+                        Icons.edit,
+                        color: Colors.white,
+                      ),
+                      label: Text(
+                        'Edit',
+                        style: TextStyle(color: Colors.white),
+                      ),
                       style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.blue),
                       onPressed: () =>
@@ -159,8 +171,14 @@ class _ManageUsersState extends State<ManageUsers>
                     ),
                     SizedBox(width: 8),
                     ElevatedButton.icon(
-                      icon: Icon(Icons.delete),
-                      label: Text('Delete'),
+                      icon: Icon(
+                        Icons.delete,
+                        color: Colors.white,
+                      ),
+                      label: Text(
+                        'Delete',
+                        style: TextStyle(color: Colors.white),
+                      ),
                       style:
                           ElevatedButton.styleFrom(backgroundColor: Colors.red),
                       onPressed: () => _showDeleteDialog(id, isAdmin: isAdmin),

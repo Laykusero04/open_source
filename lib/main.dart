@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'firebase_options.dart';
 import 'onboarding_screen.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_windowmanager/flutter_windowmanager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +22,11 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Disable screenshots and screen recording for Android
+    if (!kIsWeb && Theme.of(context).platform == TargetPlatform.android) {
+      FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_SECURE);
+    }
+
     return MaterialApp(
       title: 'PDF Viewer',
       debugShowCheckedModeBanner: false,

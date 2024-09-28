@@ -3,11 +3,15 @@ import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
+import 'package:pdf/pdf.dart';
+import 'package:printing/printing.dart';
 
 class PdfScreen extends StatefulWidget {
   final String pdfUrl;
+  final String title;
 
-  const PdfScreen({Key? key, required this.pdfUrl}) : super(key: key);
+  const PdfScreen({Key? key, required this.pdfUrl, required this.title})
+      : super(key: key);
 
   @override
   State<PdfScreen> createState() => _PdfScreenState();
@@ -85,17 +89,23 @@ class _PdfScreenState extends State<PdfScreen> {
     }
   }
 
+  Future<void> _printPdf() async {
+    if (pdfFile != null) {
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdfFile!.readAsBytes(),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.pdfUrl.split('/').last),
+        title: Text(widget.title),
         actions: [
           IconButton(
             icon: const Icon(Icons.print),
-            onPressed: () {
-              // Implement print functionality
-            },
+            onPressed: _printPdf,
           ),
         ],
       ),
@@ -184,7 +194,7 @@ class _PdfScreenState extends State<PdfScreen> {
           icon: const Icon(Icons.zoom_out),
           onPressed: _zoomOut,
         ),
-        Text('${(_zoom * 100).toInt()}%'),
+        Text('${(_zoom * 100).round()}%'),
         IconButton(
           icon: const Icon(Icons.zoom_in),
           onPressed: _zoomIn,
