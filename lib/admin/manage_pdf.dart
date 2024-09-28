@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'dart:io';
 import 'manage_access_pdf.dart';
 import 'package:intl/intl.dart';
@@ -250,63 +251,176 @@ class _ManagePdfState extends State<ManagePdf> {
       return Container();
     }
 
-    return FutureBuilder<String>(
-      future: _getCreatorName(data['createdBy']),
-      builder: (context, snapshot) {
-        String creatorName = snapshot.data ?? 'Loading...';
-
-        return Card(
-          elevation: 2,
-          margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+    return Slidable(
+      endActionPane: ActionPane(
+        motion: ScrollMotion(),
+        children: [
+          SlidableAction(
+            onPressed: (context) => _editPdf(doc),
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.white,
+            icon: Icons.edit,
+            label: 'Edit',
           ),
-          child: ListTile(
-            contentPadding: EdgeInsets.all(16),
-            title: Text(
-              data['title'] ?? 'Untitled',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(height: 4),
-                Text(data['description'] ?? 'No description'),
-                SizedBox(height: 4),
-                Text(
-                  'Created by: $creatorName',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Created: ${_formatTimestamp(data['timestamp'])}',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                ),
-              ],
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: Icon(Icons.folder, color: Colors.deepOrange),
-                  onPressed: () => _showMoveToPdfDialog(doc.id),
-                ),
-                IconButton(
-                  icon: Icon(Icons.person_add, color: Colors.deepOrange),
-                  onPressed: () => _showAddTakerDialog(doc.id),
-                ),
-              ],
-            ),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ManageAccessPdf(
-                  pdfId: doc.id,
-                  pdfTitle: data['title'] ?? 'Untitled',
-                ),
+          SlidableAction(
+            onPressed: (context) => _deletePdf(doc),
+            backgroundColor: Colors.red,
+            foregroundColor: Colors.white,
+            icon: Icons.delete,
+            label: 'Delete',
+          ),
+        ],
+      ),
+      child: Card(
+        elevation: 2,
+        margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: ListTile(
+          contentPadding: EdgeInsets.all(16),
+          title: Text(
+            data['title'] ?? 'Untitled',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(height: 4),
+              Text(data['description'] ?? 'No description'),
+              SizedBox(height: 4),
+              Text(
+                'Created by: ${data['createdBy'] ?? 'Unknown'}',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Created: ${_formatTimestamp(data['timestamp'])}',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+            ],
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: Icon(Icons.folder, color: Colors.deepOrange),
+                onPressed: () => _showMoveToPdfDialog(doc.id),
+              ),
+              IconButton(
+                icon: Icon(Icons.person_add, color: Colors.deepOrange),
+                onPressed: () => _showAddTakerDialog(doc.id),
+              ),
+            ],
+          ),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ManageAccessPdf(
+                pdfId: doc.id,
+                pdfTitle: data['title'] ?? 'Untitled',
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  void _editPdf(DocumentSnapshot doc) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    _titleController.text = data['title'] ?? '';
+    _descriptionController.text = data['description'] ?? '';
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Edit PDF'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: _titleController,
+                  decoration: InputDecoration(
+                    labelText: 'Title',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                SizedBox(height: 10),
+                TextField(
+                  controller: _descriptionController,
+                  decoration: InputDecoration(
+                    labelText: 'Description',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 3,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              child: Text('Cancel'),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _titleController.clear();
+                _descriptionController.clear();
+              },
+            ),
+            ElevatedButton(
+              child: Text('Save'),
+              onPressed: () async {
+                await _firestore.collection('pdfs').doc(doc.id).update({
+                  'title': _titleController.text,
+                  'description': _descriptionController.text,
+                });
+                Navigator.of(context).pop();
+                _titleController.clear();
+                _descriptionController.clear();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('PDF updated successfully')),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                foregroundColor: Colors.white,
+                backgroundColor: Colors.deepOrange,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _deletePdf(DocumentSnapshot doc) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Delete PDF'),
+          content: Text('Are you sure you want to delete this PDF?'),
+          actions: [
+            TextButton(
+              child: Text('Cancel'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            ElevatedButton(
+              child: Text('Delete'),
+              onPressed: () async {
+                await _firestore.collection('pdfs').doc(doc.id).delete();
+                Navigator.of(context).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('PDF deleted successfully')),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                foregroundColor: Colors.white,
+                backgroundColor: Colors.red,
+              ),
+            ),
+          ],
         );
       },
     );

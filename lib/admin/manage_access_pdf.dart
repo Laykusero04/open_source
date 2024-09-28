@@ -141,7 +141,7 @@ class _ManageAccessPdfState extends State<ManageAccessPdf>
     return Scaffold(
       appBar: AppBar(
         title: Text('Manage Access: ${widget.pdfTitle}'),
-        backgroundColor: Colors.orange[700],
+        backgroundColor: Colors.deepOrange,
         bottom: TabBar(
           controller: _tabController,
           tabs: [
@@ -191,7 +191,6 @@ class _ManageAccessPdfState extends State<ManageAccessPdf>
             },
           ),
         ),
-        _buildAddTakersButton(),
       ],
     );
   }
@@ -231,7 +230,7 @@ class _ManageAccessPdfState extends State<ManageAccessPdf>
                 Text(fullName, style: TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Text(deviceId),
             trailing: IconButton(
-              icon: Icon(Icons.delete, color: Colors.orange[700]),
+              icon: Icon(Icons.delete, color: Colors.deepOrange),
               onPressed: () => _showDeleteConfirmationDialog(takerId),
             ),
           ),
@@ -307,20 +306,6 @@ class _ManageAccessPdfState extends State<ManageAccessPdf>
     } catch (e) {
       print('Error removing taker: $e');
     }
-  }
-
-  Widget _buildAddTakersButton() {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: ElevatedButton(
-        child: Text('Add Takers'),
-        onPressed: _showAddTakerDialog,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.orange[700],
-          minimumSize: Size(double.infinity, 50),
-        ),
-      ),
-    );
   }
 
   void _showAddTakerDialog() {
