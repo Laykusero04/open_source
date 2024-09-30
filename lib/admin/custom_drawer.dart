@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:open_source_pdf/admin/dashboard.dart';
-import 'package:open_source_pdf/admin/manage_pdf.dart';
+import 'package:open_source_pdf/admin/manage_folders.dart';
 import 'package:open_source_pdf/home_screen.dart';
 import 'manage_users.dart';
 
@@ -142,7 +142,8 @@ class CustomDrawer extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => ManagePdf(currentUserId: userId),
+                        builder: (context) =>
+                            ManageFolders(currentUserId: userId),
                       ),
                     );
                   },

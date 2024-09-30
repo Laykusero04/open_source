@@ -7,13 +7,9 @@ import 'package:flutter_windowmanager/flutter_windowmanager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  if (kIsWeb) {
-    await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform);
-  } else {
-    await Firebase.initializeApp(
-        name: "opensource", options: DefaultFirebaseOptions.currentPlatform);
-  }
+
+  await Firebase.initializeApp(
+      name: "opensource", options: DefaultFirebaseOptions.currentPlatform);
   runApp(MyApp());
 }
 

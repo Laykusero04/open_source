@@ -16,13 +16,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     {
       'title': 'Welcome to OpenSource',
       'description':
-          'Discover a new way to manage and view your PDF documents.',
+          'Empowering engineers to pass their board exams with confidence.',
       'image': 'images/OS-logo.png',
     },
     {
-      'title': 'Easy PDF Management',
+      'title': 'Achieve Your Goals',
       'description':
-          'Organize, view, and share your PDFs with just a few taps.',
+          'Join the ranks of successful engineers who conquered the board exams with our help.',
       'image': 'images/OS-top.png',
     },
   ];

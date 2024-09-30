@@ -1,181 +1,152 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
-class ManageFoldersScreen extends StatefulWidget {
+import 'manage_pdfs.dart';
+
+class ManageFolders extends StatefulWidget {
   final String currentUserId;
 
-  const ManageFoldersScreen({Key? key, required this.currentUserId})
+  const ManageFolders({Key? key, required this.currentUserId})
       : super(key: key);
 
   @override
-  State<ManageFoldersScreen> createState() => _ManageFoldersScreenState();
+  _ManageFoldersState createState() => _ManageFoldersState();
 }
 
-class _ManageFoldersScreenState extends State<ManageFoldersScreen> {
+class _ManageFoldersState extends State<ManageFolders> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final TextEditingController _folderNameController = TextEditingController();
-  final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = '';
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Manage Folders', style: TextStyle(color: Colors.white)),
+        title: Text('Folders', style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.deepOrange,
         elevation: 0,
       ),
-      body: Column(
-        children: [
-          _buildSearchBar(),
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream:
-                  _firestore.collection('folders').orderBy('name').snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
-                }
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(child: CircularProgressIndicator());
-                }
-
-                var folders = snapshot.data!.docs;
-                if (_searchQuery.isNotEmpty) {
-                  folders = folders
-                      .where((doc) => doc['name']
-                          .toString()
-                          .toLowerCase()
-                          .contains(_searchQuery.toLowerCase()))
-                      .toList();
-                }
-
-                if (folders.isEmpty) {
-                  return Center(
-                      child: Text(_searchQuery.isEmpty
-                          ? 'No folders found. Create one!'
-                          : 'No folders match your search.'));
-                }
-
-                return ListView.builder(
-                  itemCount: folders.length,
-                  itemBuilder: (context, index) {
-                    DocumentSnapshot doc = folders[index];
-                    return _buildFolderListItem(doc);
-                  },
-                );
-              },
-            ),
-          ),
-        ],
+      body: StreamBuilder<QuerySnapshot>(
+        stream: _firestore
+            .collection('folders')
+            .orderBy('timestamp', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
+          return ListView.builder(
+            itemCount: snapshot.data!.docs.length,
+            itemBuilder: (context, index) {
+              DocumentSnapshot doc = snapshot.data!.docs[index];
+              return _buildFolderListItem(doc);
+            },
+          );
+        },
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddEditFolderDialog(),
+        onPressed: _showAddFolderDialog,
         icon: Icon(Icons.create_new_folder, color: Colors.white),
-        label: Text('New Folder', style: TextStyle(color: Colors.white)),
+        label: Text('Create Folder', style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.deepOrange,
-      ),
-    );
-  }
-
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: TextField(
-        controller: _searchController,
-        decoration: InputDecoration(
-          hintText: 'Search folders...',
-          prefixIcon: Icon(Icons.search),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(20),
-            borderSide: BorderSide.none,
-          ),
-          filled: true,
-          fillColor: Colors.grey[200],
-          suffixIcon: _searchQuery.isNotEmpty
-              ? IconButton(
-                  icon: Icon(Icons.clear),
-                  onPressed: () {
-                    setState(() {
-                      _searchController.clear();
-                      _searchQuery = '';
-                    });
-                  },
-                )
-              : null,
-        ),
-        onChanged: (value) {
-          setState(() {
-            _searchQuery = value;
-          });
-        },
       ),
     );
   }
 
   Widget _buildFolderListItem(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-    return Card(
-      elevation: 2,
-      margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: ListTile(
-        leading: Icon(Icons.folder, color: Colors.deepOrange, size: 36),
-        title: Text(
-          data['name'] ?? 'Unnamed Folder',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Text('Created on: ${_formatTimestamp(data['timestamp'])}'),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: Icon(Icons.edit, color: Colors.green),
-              onPressed: () => _showAddEditFolderDialog(doc: doc),
+    return FutureBuilder<String>(
+      future: _getUserFullName(data['createdBy']),
+      builder: (context, snapshot) {
+        String createdByFullName = snapshot.data ?? 'Unknown';
+        return Card(
+          elevation: 2,
+          margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+          child: ListTile(
+            title: Text(data['name'] ?? 'Unnamed Folder',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(height: 4),
+                Text('Created by: $createdByFullName'),
+                SizedBox(height: 4),
+                Text('Created: ${_formatTimestamp(data['timestamp'])}'),
+              ],
             ),
-            IconButton(
-              icon: Icon(Icons.delete, color: Colors.red),
-              onPressed: () => _showDeleteConfirmationDialog(doc.id),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: Icon(Icons.edit, color: Colors.blue),
+                  onPressed: () => _showEditFolderDialog(doc),
+                ),
+                IconButton(
+                  icon: Icon(Icons.delete, color: Colors.red),
+                  onPressed: () => _showDeleteFolderDialog(doc.id),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ManagePdfs(
+                    folderId: doc.id,
+                    folderName: data['name'] ?? 'Unnamed Folder',
+                    currentUserId: widget.currentUserId,
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
-  Future<void> _showAddEditFolderDialog({DocumentSnapshot? doc}) async {
-    if (doc != null) {
-      _folderNameController.text = doc['name'];
-    } else {
-      _folderNameController.clear();
+  Future<String> _getUserFullName(String? userId) async {
+    if (userId == null) return 'Unknown';
+    try {
+      DocumentSnapshot userDoc =
+          await _firestore.collection('admin').doc(userId).get();
+      if (userDoc.exists) {
+        return userDoc['full_name'] ?? 'Unknown';
+      }
+    } catch (e) {
+      print('Error fetching user full name: $e');
     }
+    return 'Unknown';
+  }
 
-    await showDialog(
+  Future<void> _showAddFolderDialog() async {
+    return showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(doc == null ? 'Add New Folder' : 'Edit Folder'),
+        title: Text('Add New Folder'),
         content: TextField(
           controller: _folderNameController,
           decoration: InputDecoration(
             labelText: 'Folder Name',
             border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.folder),
           ),
         ),
         actions: [
           TextButton(
             child: Text('Cancel'),
             onPressed: () {
+              _folderNameController.clear();
               Navigator.of(context).pop();
             },
           ),
           ElevatedButton(
-            child: Text(doc == null ? 'Add' : 'Update'),
+            child: Text('Add'),
             onPressed: () {
-              if (doc == null) {
-                _addFolder(_folderNameController.text);
-              } else {
-                _updateFolder(doc.id, _folderNameController.text);
-              }
+              _addFolder(_folderNameController.text);
+              _folderNameController.clear();
               Navigator.of(context).pop();
             },
             style: ElevatedButton.styleFrom(
@@ -190,7 +161,9 @@ class _ManageFoldersScreenState extends State<ManageFoldersScreen> {
 
   Future<void> _addFolder(String folderName) async {
     if (folderName.trim().isEmpty) {
-      _showSnackBar('Folder name cannot be empty');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Folder name cannot be empty')),
+      );
       return;
     }
 
@@ -200,86 +173,99 @@ class _ManageFoldersScreenState extends State<ManageFoldersScreen> {
         'createdBy': widget.currentUserId,
         'timestamp': FieldValue.serverTimestamp(),
       });
-      _showSnackBar('Folder added successfully');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Folder added successfully')),
+      );
     } catch (e) {
       print('Error adding folder: $e');
-      _showSnackBar('Error adding folder: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error adding folder: $e')),
+      );
     }
   }
 
-  Future<void> _updateFolder(String docId, String newName) async {
-    if (newName.trim().isEmpty) {
-      _showSnackBar('Folder name cannot be empty');
-      return;
-    }
+  void _showEditFolderDialog(DocumentSnapshot doc) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    _folderNameController.text = data['name'] ?? '';
 
-    try {
-      await _firestore.collection('folders').doc(docId).update({
-        'name': newName,
-        'updatedBy': widget.currentUserId,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-      _showSnackBar('Folder updated successfully');
-    } catch (e) {
-      print('Error updating folder: $e');
-      _showSnackBar('Error updating folder: $e');
-    }
-  }
-
-  Future<void> _showDeleteConfirmationDialog(String docId) async {
-    return showDialog(
+    showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Delete Folder'),
-        content: Text('Are you sure you want to delete this folder?'),
-        actions: [
-          TextButton(
-            child: Text('Cancel'),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          ElevatedButton(
-            child: Text('Delete'),
-            onPressed: () {
-              _deleteFolder(docId);
-              Navigator.of(context).pop();
-            },
-            style: ElevatedButton.styleFrom(
-              foregroundColor: Colors.white,
-              backgroundColor: Colors.red,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Edit Folder'),
+          content: TextField(
+            controller: _folderNameController,
+            decoration: InputDecoration(
+              labelText: 'Folder Name',
+              border: OutlineInputBorder(),
             ),
           ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              child: Text('Cancel'),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _folderNameController.clear();
+              },
+            ),
+            ElevatedButton(
+              child: Text('Save'),
+              onPressed: () async {
+                await _firestore.collection('folders').doc(doc.id).update({
+                  'name': _folderNameController.text,
+                });
+                Navigator.of(context).pop();
+                _folderNameController.clear();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Folder updated successfully')),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                foregroundColor: Colors.white,
+                backgroundColor: Colors.deepOrange,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
-  Future<void> _deleteFolder(String docId) async {
-    try {
-      await _firestore.collection('folders').doc(docId).delete();
-      _showSnackBar('Folder deleted successfully');
-    } catch (e) {
-      print('Error deleting folder: $e');
-      _showSnackBar('Error deleting folder: $e');
-    }
-  }
-
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
-      ),
+  void _showDeleteFolderDialog(String folderId) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Delete Folder'),
+          content: Text('Are you sure you want to delete this folder?'),
+          actions: [
+            TextButton(
+              child: Text('Cancel'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            ElevatedButton(
+              child: Text('Delete'),
+              onPressed: () async {
+                await _firestore.collection('folders').doc(folderId).delete();
+                Navigator.of(context).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Folder deleted successfully')),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                foregroundColor: Colors.white,
+                backgroundColor: Colors.red,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
   String _formatTimestamp(Timestamp? timestamp) {
     if (timestamp == null) return 'Unknown';
-    return DateTime.fromMillisecondsSinceEpoch(timestamp.millisecondsSinceEpoch)
-        .toString()
-        .split(' ')[0];
+    return DateFormat('MMM d, yyyy').format(timestamp.toDate());
   }
 
   @override

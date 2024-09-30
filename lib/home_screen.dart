@@ -4,8 +4,10 @@ import 'package:open_source_pdf/admin/login.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'folder_list_screen.dart';
 import 'pdf_list_screen.dart';
-import 'register_account_screen.dart';
+
+enum AccessStatus { notRequested, pending, approved }
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -16,6 +18,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeState extends State<HomeScreen> {
   late Future<Map<String, dynamic>> _userDataFuture;
+  AccessStatus _accessStatus = AccessStatus.notRequested;
 
   @override
   void initState() {
@@ -25,13 +28,72 @@ class _HomeState extends State<HomeScreen> {
 
   Future<Map<String, dynamic>> _getUserData() async {
     final String deviceUid = await _getDeviceUniqueId();
-    final userDoc = await _getUserDocument(deviceUid);
+    await _checkAccessStatus(deviceUid);
     return {
       'deviceUid': deviceUid,
-      'isRegistered': userDoc != null,
-      'firstName': userDoc?['firstName'],
-      'lastName': userDoc?['lastName'],
     };
+  }
+
+  Future<void> _checkAccessStatus(String deviceUid) async {
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(deviceUid)
+        .get();
+
+    if (userDoc.exists) {
+      setState(() {
+        _accessStatus = AccessStatus.approved;
+      });
+    } else {
+      final pendingDoc = await FirebaseFirestore.instance
+          .collection('pending_users')
+          .doc(deviceUid)
+          .get();
+
+      if (pendingDoc.exists) {
+        setState(() {
+          _accessStatus = AccessStatus.pending;
+        });
+      } else {
+        // Automatically approve access if the device ID is not in pending_users
+        await _approveAccess(deviceUid);
+      }
+    }
+  }
+
+  Future<void> _approveAccess(String deviceUid) async {
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(deviceUid).set({
+        'deviceUniqueId': deviceUid,
+        'approvedAt': FieldValue.serverTimestamp(),
+        'firstName': 'New',
+        'lastName': 'User',
+      });
+
+      setState(() {
+        _accessStatus = AccessStatus.approved;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Access automatically approved.'),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error approving access: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
   }
 
   Future<String> _getDeviceUniqueId() async {
@@ -47,25 +109,22 @@ class _HomeState extends State<HomeScreen> {
     try {
       if (Theme.of(context).platform == TargetPlatform.android) {
         final AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
-        deviceId = androidInfo.id ?? ''; // Use Android ID
+        deviceId = androidInfo.id ?? '';
       } else if (Theme.of(context).platform == TargetPlatform.iOS) {
         final IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
-        deviceId = iosInfo.identifierForVendor ?? ''; // Use iOS Vendor ID
+        deviceId = iosInfo.identifierForVendor ?? '';
       }
 
-      // If we couldn't get a device ID, generate a unique one
       if (deviceId.isEmpty) {
         deviceId = DateTime.now().millisecondsSinceEpoch.toString() +
             '-' +
             UniqueKey().toString();
       }
 
-      // Store the device ID for future use
       await prefs.setString('device_uid', deviceId);
       return deviceId;
     } catch (e) {
       print('Error getting device info: $e');
-      // In case of an error, generate and store a fallback ID
       String fallbackId = DateTime.now().millisecondsSinceEpoch.toString() +
           '-fallback-' +
           UniqueKey().toString();
@@ -74,53 +133,11 @@ class _HomeState extends State<HomeScreen> {
     }
   }
 
-  Future<DocumentSnapshot?> _getUserDocument(String deviceUid) async {
-    final QuerySnapshot result = await FirebaseFirestore.instance
-        .collection('users')
-        .where('deviceUniqueId', isEqualTo: deviceUid)
-        .limit(1)
-        .get();
-
-    if (result.docs.isNotEmpty) {
-      return result.docs.first;
-    }
-    return null;
-  }
-
-  void _navigateToAccountScreen(String deviceUniqueId, bool isRegistered) {
+  void _navigateToFolderList(String deviceUid) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => RegisterAccountScreen(
-          deviceUniqueId: deviceUniqueId,
-          isUpdate: isRegistered,
-        ),
-      ),
-    ).then((_) {
-      // Refresh the user data when returning from the account screen
-      setState(() {
-        _userDataFuture = _getUserData();
-      });
-    });
-  }
-
-  void _navigateToPdfList(String deviceUid) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PdfListScreen(deviceUuid: deviceUid),
-      ),
-    );
-  }
-
-  void _copyDeviceUID(String uid) {
-    Clipboard.setData(ClipboardData(text: uid));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Device Unique ID copied to clipboard'),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        builder: (context) => FolderListScreen(deviceUuid: deviceUid),
       ),
     );
   }
@@ -225,47 +242,46 @@ class _HomeState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Device Unique ID',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.deepOrange,
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.copy, color: Colors.deepOrange),
-                  onPressed: () => _copyDeviceUID(userData['deviceUid']),
-                ),
-              ],
+            const Text(
+              'Device Unique ID',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.deepOrange,
+              ),
             ),
             const SizedBox(height: 10),
             Text(
               userData['deviceUid'],
               style: const TextStyle(fontSize: 16, color: Colors.black87),
             ),
-            if (userData['isRegistered']) ...[
-              const SizedBox(height: 20),
-              const Text(
-                'Registered User',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.deepOrange,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                '${userData['firstName']} ${userData['lastName']}',
-                style: const TextStyle(fontSize: 16, color: Colors.black87),
-              ),
-            ],
+            const SizedBox(height: 20),
+            _buildAccessStatusButton(userData['deviceUid']),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildAccessStatusButton(String uid) {
+    switch (_accessStatus) {
+      case AccessStatus.notRequested:
+      case AccessStatus.pending:
+      case AccessStatus.approved:
+        return _buildStatusButton('Access Approved', Colors.green, null);
+    }
+  }
+
+  Widget _buildStatusButton(String text, Color color, VoidCallback? onPressed) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        foregroundColor: Colors.white,
+        backgroundColor: color,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+      ),
+      child: Text(text, style: const TextStyle(fontSize: 16)),
     );
   }
 
@@ -274,7 +290,7 @@ class _HomeState extends State<HomeScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ElevatedButton.icon(
-          onPressed: () => _navigateToPdfList(userData['deviceUid']),
+          onPressed: () => _navigateToFolderList(userData['deviceUid']),
           style: ElevatedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 15),
             shape:
@@ -282,27 +298,8 @@ class _HomeState extends State<HomeScreen> {
             backgroundColor: Colors.white,
             foregroundColor: Colors.deepOrange,
           ),
-          icon: const Icon(Icons.list),
-          label: const Text("PDF List", style: TextStyle(fontSize: 16)),
-        ),
-        const SizedBox(height: 15),
-        ElevatedButton.icon(
-          onPressed: () => _navigateToAccountScreen(
-            userData['deviceUid'],
-            userData['isRegistered'],
-          ),
-          style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 15),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.deepOrange,
-          ),
-          icon: Icon(userData['isRegistered'] ? Icons.edit : Icons.account_box),
-          label: Text(
-            userData['isRegistered'] ? "Update Account" : "Register Account",
-            style: const TextStyle(fontSize: 16),
-          ),
+          icon: const Icon(Icons.folder),
+          label: const Text("Access PDFs", style: TextStyle(fontSize: 16)),
         ),
       ],
     );

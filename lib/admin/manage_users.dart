@@ -21,7 +21,7 @@ class _ManageUsersState extends State<ManageUsers>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -50,6 +50,7 @@ class _ManageUsersState extends State<ManageUsers>
           unselectedLabelColor: Colors.white70,
           indicatorSize: TabBarIndicatorSize.tab,
           tabs: [
+            Tab(text: 'Pending'),
             Tab(text: 'Users'),
             Tab(text: 'Admins'),
           ],
@@ -58,6 +59,7 @@ class _ManageUsersState extends State<ManageUsers>
       body: TabBarView(
         controller: _tabController,
         children: [
+          _buildPendingList(),
           _buildUserList(),
           _buildAdminList(),
         ],
@@ -129,6 +131,37 @@ class _ManageUsersState extends State<ManageUsers>
     );
   }
 
+  Widget _buildPendingList() {
+    return Container(
+      color: Colors.white,
+      child: StreamBuilder<QuerySnapshot>(
+        stream:
+            FirebaseFirestore.instance.collection('pending_users').snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
+
+          final pendingUsers = snapshot.data!.docs;
+
+          return ListView.builder(
+            itemCount: pendingUsers.length,
+            itemBuilder: (context, index) {
+              final pendingUser =
+                  pendingUsers[index].data() as Map<String, dynamic>;
+              final pendingUserId = pendingUsers[index].id;
+              return _buildPendingUserCard(pendingUserId, pendingUser);
+            },
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildInteractiveCard(
       String id, Map<String, dynamic> data, bool isAdmin) {
     return Card(
@@ -191,6 +224,112 @@ class _ManageUsersState extends State<ManageUsers>
         ],
       ),
     );
+  }
+
+  Widget _buildPendingUserCard(String id, Map<String, dynamic> data) {
+    return Card(
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: Colors.grey[400],
+          child: Icon(Icons.person_add, color: Colors.white),
+        ),
+        title: Text(data['deviceUniqueId']),
+        subtitle: Text('Pending User'),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: Icon(Icons.check, color: Colors.green),
+              onPressed: () => _showConfirmationDialog(
+                'Accept User',
+                'Are you sure you want to accept this user?',
+                () => _acceptPendingUser(id, data),
+              ),
+            ),
+            IconButton(
+              icon: Icon(Icons.close, color: Colors.red),
+              onPressed: () => _showConfirmationDialog(
+                'Decline User',
+                'Are you sure you want to decline this user?',
+                () => _declinePendingUser(id),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showConfirmationDialog(
+      String title, String content, Function onConfirm) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(content),
+          actions: [
+            TextButton(
+              child: Text('Cancel'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            ElevatedButton(
+              child: Text('Confirm'),
+              style:
+                  ElevatedButton.styleFrom(backgroundColor: Colors.orange[700]),
+              onPressed: () {
+                Navigator.of(context).pop();
+                onConfirm();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _acceptPendingUser(String id, Map<String, dynamic> data) async {
+    try {
+      // Add the user to the 'users' collection
+      await FirebaseFirestore.instance.collection('users').add({
+        'deviceUniqueId': data['deviceUniqueId'],
+        'firstName': 'New',
+        'lastName': 'User',
+      });
+
+      // Remove the user from the 'pending_users' collection
+      await FirebaseFirestore.instance
+          .collection('pending_users')
+          .doc(id)
+          .delete();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('User request accepted')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error accepting user request: $e')),
+      );
+    }
+  }
+
+  void _declinePendingUser(String id) async {
+    try {
+      // Remove the user from the 'pending_users' collection
+      await FirebaseFirestore.instance
+          .collection('pending_users')
+          .doc(id)
+          .delete();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('User request declined')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error declining user request: $e')),
+      );
+    }
   }
 
   void _showAddDialog({required bool isAdmin}) {
